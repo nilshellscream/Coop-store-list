@@ -74,6 +74,38 @@
         .filter-row:hover {
             background-color: var(--coop-green-light);
         }
+
+        .filter-section-search {
+            width: 100%;
+            font-size: 11px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 5px 8px 5px 26px;
+            outline: none;
+            background-color: #f8fafc;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8' stroke-width='2.5'><path stroke-linecap='round' stroke-linejoin='round' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'/></svg>");
+            background-repeat: no-repeat;
+            background-position: 7px center;
+            background-size: 12px 12px;
+            margin-bottom: 6px;
+            transition: border-color 0.15s, background-color 0.15s;
+        }
+        .filter-section-search:focus {
+            border-color: var(--coop-green);
+            background-color: white;
+        }
+        .filter-section-search::placeholder {
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        .filter-empty {
+            font-size: 10px;
+            color: #94a3b8;
+            font-style: italic;
+            padding: 8px 4px;
+            text-align: center;
+        }
     </style>
 </head>
 <body class="bg-slate-50 font-sans text-slate-900 antialiased overflow-hidden">
@@ -129,6 +161,7 @@
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                         </header>
                         <content class="p-2 bg-white border-t border-slate-50">
+                            <input type="text" class="filter-section-search" placeholder="Sök stad..." data-target="cityFilters">
                             <div id="cityFilters" class="space-y-1 max-h-48 overflow-y-auto pr-1"></div>
                         </content>
                     </div>
@@ -140,6 +173,7 @@
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                         </header>
                         <content class="p-2 bg-white border-t border-slate-50">
+                            <input type="text" class="filter-section-search" placeholder="Sök ägare..." data-target="ownerFilters">
                             <div id="ownerFilters" class="space-y-1 max-h-48 overflow-y-auto pr-1"></div>
                         </content>
                     </div>
@@ -151,7 +185,20 @@
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                         </header>
                         <content class="p-2 bg-white border-t border-slate-50">
+                            <input type="text" class="filter-section-search" placeholder="Sök koncept..." data-target="conceptFilters">
                             <div id="conceptFilters" class="space-y-1 max-h-48 overflow-y-auto pr-1"></div>
+                        </content>
+                    </div>
+
+                    <!-- Butiker -->
+                    <div class="filter-section border border-slate-100 rounded-lg overflow-hidden" id="section-stores">
+                        <header class="flex items-center justify-between p-3 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors">
+                            <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Butiker</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                        </header>
+                        <content class="p-2 bg-white border-t border-slate-50">
+                            <input type="text" class="filter-section-search" placeholder="Sök butik..." data-target="storeFilters">
+                            <div id="storeFilters" class="space-y-1 max-h-48 overflow-y-auto pr-1"></div>
                         </content>
                     </div>
                 </div>
@@ -200,7 +247,8 @@
             search: '',
             cities: new Set(),
             owners: new Set(),
-            concepts: new Set()
+            concepts: new Set(),
+            stores: new Set()
         };
 
         function initMap() {
@@ -235,7 +283,8 @@
                         const isNotClosed = (row['Close Date'] || '').toLowerCase().trim() === '' || (row['Close Date'] || '').toLowerCase().trim() === 'n/a';
                         
                         return hasCoords && isNotClosed;
-                    }).map(row => ({
+                    }).map((row, idx) => ({
+                        _id: idx,
                         name: row['Display Name'] || row['Ledger ID'] || 'Okänd butik',
                         storeId: row['Ledger ID'] || '-',
                         city: row['City'] || 'Saknas',
@@ -249,6 +298,7 @@
 
                     console.log("Validerad data, rader:", allData.length);
                     setupFilters();
+                    rebuildStoreFilter();
                     updateUI();
                     document.getElementById('loader').classList.add('hidden');
                 },
@@ -260,26 +310,61 @@
         }
 
         function setupFilters() {
-            createCheckboxFilter('cityFilters', allData.map(d => d.city), activeFilters.cities);
-            createCheckboxFilter('ownerFilters', allData.map(d => d.owner), activeFilters.owners);
-            createCheckboxFilter('conceptFilters', allData.map(d => d.concept), activeFilters.concepts);
+            // Callbacks: stad/ägare/koncept måste bygga om butikslistan när de ändras.
+            const onParentFilterChange = () => {
+                rebuildStoreFilter();
+                updateUI();
+            };
 
+            createCheckboxFilter('cityFilters', 
+                [...new Set(allData.map(d => d.city).filter(i => i && i !== 'Saknas'))].sort().map(v => ({ id: v, label: v })),
+                activeFilters.cities,
+                { onChange: onParentFilterChange }
+            );
+            createCheckboxFilter('ownerFilters', 
+                [...new Set(allData.map(d => d.owner).filter(i => i && i !== 'Saknas'))].sort().map(v => ({ id: v, label: v })),
+                activeFilters.owners,
+                { onChange: onParentFilterChange }
+            );
+            createCheckboxFilter('conceptFilters', 
+                [...new Set(allData.map(d => d.concept).filter(i => i && i !== 'Saknas'))].sort().map(v => ({ id: v, label: v })),
+                activeFilters.concepts,
+                { onChange: onParentFilterChange }
+            );
+
+            // Global sök i registret (filtrerar tabellen/kartan)
             document.getElementById('searchInput').addEventListener('input', (e) => {
                 activeFilters.search = e.target.value.toLowerCase();
                 updateUI();
             });
 
+            // Sökrutor inuti varje dropdown (filtrerar bara den synliga listan)
+            document.querySelectorAll('.filter-section-search').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    e.stopPropagation();
+                    applyFilterSearch(input.dataset.target, input.value);
+                });
+                // Förhindra att klick på sökrutan stänger sektionen
+                input.addEventListener('click', (e) => e.stopPropagation());
+            });
+
+            // Expandera/kollapsa sektioner
             document.querySelectorAll('.filter-section header').forEach(header => {
                 header.onclick = () => header.parentElement.classList.toggle('active');
             });
 
             document.getElementById('resetFilters').onclick = () => {
-                document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
                 activeFilters.cities.clear(); 
                 activeFilters.owners.clear(); 
                 activeFilters.concepts.clear();
-                document.getElementById('searchInput').value = '';
+                activeFilters.stores.clear();
                 activeFilters.search = '';
+                document.getElementById('searchInput').value = '';
+                document.querySelectorAll('.filter-section-search').forEach(i => i.value = '');
+                
+                // Bygg om alla filter så ingen är ikryssad
+                setupFilters();
+                rebuildStoreFilter();
                 updateUI();
                 map.setView([62.0, 15.0], 5);
             };
@@ -287,23 +372,75 @@
             document.getElementById('downloadCsv').onclick = exportCsv;
         }
 
-        function createCheckboxFilter(containerId, items, filterSet) {
+        function createCheckboxFilter(containerId, items, filterSet, options = {}) {
             const container = document.getElementById(containerId);
-            const uniqueItems = [...new Set(items.filter(i => i && i !== 'Saknas'))].sort();
+            container.innerHTML = '';
             
-            uniqueItems.forEach(item => {
+            if (items.length === 0) {
+                container.innerHTML = '<div class="filter-empty">Inga träffar med nuvarande filter</div>';
+                return;
+            }
+
+            items.forEach(({ id, label }) => {
+                const safeId = String(id).replace(/[^a-zA-Z0-9]/g, '_');
                 const div = document.createElement('div');
                 div.className = 'flex items-center space-x-2 p-1.5 rounded-md cursor-pointer transition-colors group filter-row';
+                div.dataset.searchText = String(label).toLowerCase();
+                const checkedAttr = filterSet.has(id) ? 'checked' : '';
                 div.innerHTML = `
-                    <input type="checkbox" id="${containerId}-${item}" class="h-3.5 w-3.5 rounded border-slate-300 cursor-pointer">
-                    <label for="${containerId}-${item}" class="text-[11px] font-medium text-slate-600 truncate cursor-pointer flex-1 cb-label">${item}</label>
+                    <input type="checkbox" id="${containerId}-${safeId}" class="h-3.5 w-3.5 rounded border-slate-300 cursor-pointer" ${checkedAttr}>
+                    <label for="${containerId}-${safeId}" class="text-[11px] font-medium text-slate-600 truncate cursor-pointer flex-1 cb-label" title="${label}">${label}</label>
                 `;
                 div.querySelector('input').onchange = (e) => {
-                    if (e.target.checked) filterSet.add(item);
-                    else filterSet.delete(item);
-                    updateUI();
+                    if (e.target.checked) filterSet.add(id);
+                    else filterSet.delete(id);
+                    if (options.onChange) options.onChange();
+                    else updateUI();
                 };
                 container.appendChild(div);
+            });
+
+            // Återapplicera ev. aktiv sökning i denna dropdown
+            const searchInput = document.querySelector(`.filter-section-search[data-target="${containerId}"]`);
+            if (searchInput && searchInput.value) {
+                applyFilterSearch(containerId, searchInput.value);
+            }
+        }
+
+        function applyFilterSearch(containerId, query) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const lower = query.toLowerCase().trim();
+            container.querySelectorAll('.filter-row').forEach(row => {
+                const text = row.dataset.searchText || '';
+                row.style.display = (!lower || text.includes(lower)) ? '' : 'none';
+            });
+        }
+
+        // Bygg butikslistan utifrån vad som är valt i stad/ägare/koncept (AND-logik).
+        // Avmarkera automatiskt butiker som inte längre är giltiga (alternativ A).
+        function rebuildStoreFilter() {
+            const eligible = allData.filter(d => {
+                const matchesCity = activeFilters.cities.size === 0 || activeFilters.cities.has(d.city);
+                const matchesOwner = activeFilters.owners.size === 0 || activeFilters.owners.has(d.owner);
+                const matchesConcept = activeFilters.concepts.size === 0 || activeFilters.concepts.has(d.concept);
+                return matchesCity && matchesOwner && matchesConcept;
+            });
+
+            const eligibleIds = new Set(eligible.map(d => d._id));
+            
+            // Rensa bort ikryssade butiker som inte längre är giltiga
+            for (const id of [...activeFilters.stores]) {
+                if (!eligibleIds.has(id)) {
+                    activeFilters.stores.delete(id);
+                }
+            }
+
+            eligible.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+            const items = eligible.map(d => ({ id: d._id, label: d.name }));
+
+            createCheckboxFilter('storeFilters', items, activeFilters.stores, {
+                onChange: () => updateUI()
             });
         }
 
@@ -314,8 +451,9 @@
                 const matchesCity = activeFilters.cities.size === 0 || activeFilters.cities.has(d.city);
                 const matchesOwner = activeFilters.owners.size === 0 || activeFilters.owners.has(d.owner);
                 const matchesConcept = activeFilters.concepts.size === 0 || activeFilters.concepts.has(d.concept);
+                const matchesStore = activeFilters.stores.size === 0 || activeFilters.stores.has(d._id);
                 
-                return matchesSearch && matchesCity && matchesOwner && matchesConcept;
+                return matchesSearch && matchesCity && matchesOwner && matchesConcept && matchesStore;
             });
 
             renderMarkers();
