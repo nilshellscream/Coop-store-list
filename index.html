@@ -106,6 +106,20 @@
             padding: 8px 4px;
             text-align: center;
         }
+
+        .filter-count-badge {
+            font-size: 9px;
+            font-weight: 800;
+            padding: 2px 7px;
+            border-radius: 9999px;
+            color: var(--coop-green);
+            background-color: var(--coop-green-light);
+            border: 1px solid var(--coop-green-border);
+            line-height: 1;
+            min-width: 18px;
+            text-align: center;
+            letter-spacing: 0;
+        }
     </style>
 </head>
 <body class="bg-slate-50 font-sans text-slate-900 antialiased overflow-hidden">
@@ -157,7 +171,10 @@
                     <!-- Stad -->
                     <div class="filter-section active border border-slate-100 rounded-lg overflow-hidden" id="section-cities">
                         <header class="flex items-center justify-between p-3 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors">
-                            <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Städer</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Städer</span>
+                                <span class="filter-count-badge" data-filter-count="cities" style="display:none;">0</span>
+                            </div>
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                         </header>
                         <content class="p-2 bg-white border-t border-slate-50">
@@ -169,7 +186,10 @@
                     <!-- Ägare -->
                     <div class="filter-section border border-slate-100 rounded-lg overflow-hidden" id="section-owners">
                         <header class="flex items-center justify-between p-3 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors">
-                            <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Ägare</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Ägare</span>
+                                <span class="filter-count-badge" data-filter-count="owners" style="display:none;">0</span>
+                            </div>
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                         </header>
                         <content class="p-2 bg-white border-t border-slate-50">
@@ -181,7 +201,10 @@
                     <!-- Koncept -->
                     <div class="filter-section border border-slate-100 rounded-lg overflow-hidden" id="section-concepts">
                         <header class="flex items-center justify-between p-3 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors">
-                            <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Koncept</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Koncept</span>
+                                <span class="filter-count-badge" data-filter-count="concepts" style="display:none;">0</span>
+                            </div>
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                         </header>
                         <content class="p-2 bg-white border-t border-slate-50">
@@ -193,7 +216,10 @@
                     <!-- Butiker -->
                     <div class="filter-section border border-slate-100 rounded-lg overflow-hidden" id="section-stores">
                         <header class="flex items-center justify-between p-3 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors">
-                            <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Butiker</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Butiker</span>
+                                <span class="filter-count-badge" data-filter-count="stores" style="display:none;">0</span>
+                            </div>
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                         </header>
                         <content class="p-2 bg-white border-t border-slate-50">
@@ -444,7 +470,28 @@
             });
         }
 
+        function updateFilterCounts() {
+            const counts = {
+                cities: activeFilters.cities.size,
+                owners: activeFilters.owners.size,
+                concepts: activeFilters.concepts.size,
+                stores: activeFilters.stores.size
+            };
+            Object.entries(counts).forEach(([key, count]) => {
+                const badge = document.querySelector(`[data-filter-count="${key}"]`);
+                if (!badge) return;
+                if (count > 0) {
+                    badge.textContent = count;
+                    badge.style.display = '';
+                } else {
+                    badge.style.display = 'none';
+                }
+            });
+        }
+
         function updateUI() {
+            updateFilterCounts();
+
             filteredData = allData.filter(d => {
                 const matchesSearch = !activeFilters.search || 
                     (d.name + d.address + d.city + d.owner).toLowerCase().includes(activeFilters.search);
